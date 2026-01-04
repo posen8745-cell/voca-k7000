@@ -3,113 +3,312 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>我的 GitHub 專案</title>
-
-  <!-- 基本 SEO -->
-  <meta name="description" content="GitHub Pages 專案首頁" />
-  <meta name="author" content="Your Name" />
-
-  <!-- 樣式 -->
+  <title>單字測驗（GitHub Pages）</title>
   <style>
-    :root {
-      --main: #2563eb;
-      --bg: #f3f4f6;
-      --card: #ffffff;
-      --text: #111827;
+    :root{
+      --main:#2563eb;
+      --bg:#f3f4f6;
+      --card:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --ok:#16a34a;
+      --bad:#dc2626;
     }
-
-    * {
-      box-sizing: border-box;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont,
-                   "Segoe UI", "Noto Sans TC", sans-serif;
+    *{ box-sizing:border-box; font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--text); }
+    header{
+      background:var(--main); color:#fff; padding:14px 18px;
+      font-size:18px; font-weight:700;
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; flex-wrap:wrap;
     }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
+    header .right{ font-weight:600; font-size:14px; opacity:.95; }
+    main{ max-width:980px; margin:18px auto; padding:0 14px; }
+    .card{
+      background:var(--card); border-radius:14px; padding:18px;
+      box-shadow:0 10px 20px rgba(0,0,0,.08);
+      margin-bottom:14px;
     }
-
-    header {
-      background: var(--main);
-      color: white;
-      padding: 16px 20px;
-      font-size: 20px;
-      font-weight: bold;
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pill{
+      border:1px solid #e5e7eb; border-radius:999px; padding:8px 12px;
+      background:#fff; font-size:14px;
     }
-
-    main {
-      max-width: 1100px;
-      margin: 20px auto;
-      padding: 0 16px;
+    button{
+      background:var(--main); color:white; border:none; padding:10px 14px;
+      border-radius:10px; cursor:pointer; font-size:14px; font-weight:650;
     }
-
-    .card {
-      background: var(--card);
-      border-radius: 14px;
-      padding: 20px;
-      box-shadow: 0 10px 20px rgba(0,0,0,.08);
-      margin-bottom: 20px;
+    button.secondary{ background:#111827; }
+    button.ghost{
+      background:#fff; color:var(--text);
+      border:1px solid #e5e7eb;
     }
-
-    h2 {
-      margin-top: 0;
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+    .qtitle{ font-size:18px; margin:0 0 8px 0; }
+    .qzh{ font-size:22px; font-weight:800; margin:0 0 14px 0; }
+    .choices{ display:grid; grid-template-columns:1fr; gap:10px; }
+    @media(min-width:720px){ .choices{ grid-template-columns:1fr 1fr; } }
+    .choice{
+      text-align:left; padding:12px 12px; border-radius:12px;
+      border:1px solid #e5e7eb; background:#fff;
     }
-
-    button {
-      background: var(--main);
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 15px;
+    .choice:hover{ background:#f9fafb; }
+    .msg{ margin-top:10px; font-weight:700; }
+    .ok{ color:var(--ok); }
+    .bad{ color:var(--bad); }
+    .small{ color:var(--muted); font-size:13px; }
+    .list{ margin:8px 0 0 0; padding-left:18px; }
+    footer{ text-align:center; color:var(--muted); font-size:13px; padding:16px; }
+    select, input[type="number"]{
+      padding:9px 10px; border-radius:10px; border:1px solid #e5e7eb;
+      font-size:14px; background:#fff;
     }
-
-    button:hover {
-      opacity: .9;
-    }
-
-    footer {
-      text-align: center;
-      padding: 16px;
-      font-size: 13px;
-      color: #6b7280;
-    }
+    code{ background:#f9fafb; padding:2px 6px; border-radius:6px; }
   </style>
 </head>
-
 <body>
 
 <header>
-  📦 我的 GitHub Pages 專案
+  <div>📚 單字測驗</div>
+  <div class="right" id="status">載入字庫中…</div>
 </header>
 
 <main>
 
   <div class="card">
-    <h2>📌 專案說明</h2>
-    <p>
-      這是一個放在 GitHub Pages 上的前端專案首頁。  
-      你可以在這裡加入系統工具、查詢頁、資料轉換、表單等功能。
-    </p>
+    <div class="row">
+      <span class="pill">題型：看中文選英文（四選一）</span>
+      <label class="pill">
+        出題模式：
+        <select id="mode">
+          <option value="random">隨機</option>
+          <option value="order">順序</option>
+        </select>
+      </label>
+      <label class="pill">
+        選項數：
+        <select id="optCount">
+          <option value="4" selected>4</option>
+          <option value="3">3</option>
+          <option value="5">5</option>
+        </select>
+      </label>
+      <button class="ghost" id="btnReset">重置本次</button>
+      <button class="secondary" id="btnNext" disabled>下一題</button>
+    </div>
+
+    <div style="margin-top:10px" class="small">
+      若頁面顯示「讀不到字庫」，請確認 JSON 檔名與路徑：<code>vocab_ceec_1_6.json</code> 放在同一層（repo root）。
+    </div>
+  </div>
+
+  <div class="card" id="quizCard">
+    <p class="qtitle">第 <span id="qNo">-</span> 題</p>
+    <p class="qzh" id="qZh">（載入中）</p>
+    <div class="choices" id="choices"></div>
+    <div class="msg" id="msg"></div>
   </div>
 
   <div class="card">
-    <h2>🛠 功能區</h2>
-    <button onclick="hello()">測試按鈕</button>
+    <div class="row">
+      <span class="pill">作答：<b id="done">0</b></span>
+      <span class="pill">答對：<b id="right">0</b></span>
+      <span class="pill">答錯：<b id="wrong">0</b></span>
+      <span class="pill">正確率：<b id="acc">0%</b></span>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="small"><b>錯題清單（本次）</b></div>
+      <ul class="list" id="wrongList"></ul>
+    </div>
   </div>
 
 </main>
 
-<footer>
-  © 2026 Your Name · Powered by GitHub Pages
-</footer>
+<footer>© 2026 · GitHub Pages</footer>
 
 <script>
-  function hello() {
-    alert("GitHub Pages 運作正常 ✅");
+  // ====== 1) 讀 JSON ======
+  const JSON_PATH = "vocab_ceec_1_6.json";
+
+  let bank = [];          // {en, zh, raw}
+  let orderIdx = 0;
+  let current = null;     // {en, zh}
+  let currentChoices = [];
+  let locked = false;
+
+  let stats = { done:0, right:0, wrong:0, wrongItems:[] };
+
+  const el = (id) => document.getElementById(id);
+
+  function pickField(obj, keys){
+    for (const k of keys){
+      if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null && String(obj[k]).trim() !== ""){
+        return String(obj[k]).trim();
+      }
+    }
+    return "";
   }
+
+  function normalizeEntry(item){
+    // 常見欄位名稱自動猜
+    const en = pickField(item, ["en","english","word","vocab","term","question","q","front"]);
+    const zh = pickField(item, ["zh","chinese","meaning","translation","def","definition","answer","a","back"]);
+    if (!en || !zh) return null;
+    return { en, zh, raw:item };
+  }
+
+  async function loadBank(){
+    el("status").textContent = "載入字庫中…";
+    try{
+      const res = await fetch(JSON_PATH, { cache:"no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+
+      let arr = [];
+      if (Array.isArray(data)) arr = data;
+      else if (data && Array.isArray(data.items)) arr = data.items;
+      else if (data && Array.isArray(data.data)) arr = data.data;
+      else {
+        // 若是物件包很多層，嘗試抓第一個 array
+        for (const k in data){
+          if (Array.isArray(data[k])) { arr = data[k]; break; }
+        }
+      }
+
+      const parsed = [];
+      for (const item of arr){
+        const e = normalizeEntry(item);
+        if (e) parsed.push(e);
+      }
+      if (parsed.length < 6){
+        throw new Error("解析到的單字太少（" + parsed.length + "）— 可能 JSON 欄位名稱不同");
+      }
+
+      bank = parsed;
+      el("status").textContent = "字庫載入完成：" + bank.length + " 筆 ✅";
+      newQuestion();
+    }catch(err){
+      console.error(err);
+      el("status").textContent = "讀不到字庫 ❌（" + err.message + "）";
+      el("qZh").textContent = "請確認 JSON 路徑/內容，或把你的 JSON 前 3 筆貼給我我幫你對欄位。";
+      el("choices").innerHTML = "";
+    }
+  }
+
+  // ====== 2) 出題 ======
+  function shuffle(a){
+    for (let i=a.length-1; i>0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function getNextItem(){
+    const mode = el("mode").value;
+    if (mode === "order"){
+      const item = bank[orderIdx % bank.length];
+      orderIdx++;
+      return item;
+    }
+    return bank[Math.floor(Math.random() * bank.length)];
+  }
+
+  function newQuestion(){
+    if (!bank.length) return;
+
+    locked = false;
+    el("msg").textContent = "";
+    el("btnNext").disabled = true;
+
+    current = getNextItem();
+
+    // 選項：包含正解 + (k-1) 個干擾
+    const k = parseInt(el("optCount").value, 10);
+    const pool = bank.filter(x => x.en !== current.en);
+    shuffle(pool);
+
+    const opts = [current.en, ...pool.slice(0, Math.max(2, k-1)).map(x => x.en)];
+    currentChoices = shuffle(opts);
+
+    // 顯示
+    el("qNo").textContent = stats.done + 1;
+    el("qZh").textContent = current.zh;
+
+    const box = el("choices");
+    box.innerHTML = "";
+    currentChoices.forEach((text) => {
+      const b = document.createElement("button");
+      b.className = "choice";
+      b.textContent = text;
+      b.addEventListener("click", () => choose(text));
+      box.appendChild(b);
+    });
+  }
+
+  // ====== 3) 作答 ======
+  function updateStats(){
+    el("done").textContent = stats.done;
+    el("right").textContent = stats.right;
+    el("wrong").textContent = stats.wrong;
+    const acc = stats.done ? Math.round(stats.right * 100 / stats.done) : 0;
+    el("acc").textContent = acc + "%";
+
+    const ul = el("wrongList");
+    ul.innerHTML = "";
+    stats.wrongItems.slice(-20).forEach(it => {
+      const li = document.createElement("li");
+      li.textContent = `${it.zh} → 正解：${it.en}（你選：${it.pick}）`;
+      ul.appendChild(li);
+    });
+  }
+
+  function lockChoices(){
+    const buttons = el("choices").querySelectorAll("button");
+    buttons.forEach(btn => btn.disabled = true);
+  }
+
+  function choose(pick){
+    if (locked) return;
+    locked = true;
+    lockChoices();
+
+    stats.done += 1;
+    if (pick === current.en){
+      stats.right += 1;
+      el("msg").textContent = "✅ 正確！";
+      el("msg").className = "msg ok";
+    }else{
+      stats.wrong += 1;
+      el("msg").textContent = `❌ 錯誤！正解是：${current.en}`;
+      el("msg").className = "msg bad";
+      stats.wrongItems.push({ zh: current.zh, en: current.en, pick });
+    }
+
+    updateStats();
+    el("btnNext").disabled = false;
+  }
+
+  // ====== 4) 控制 ======
+  el("btnNext").addEventListener("click", () => newQuestion());
+
+  el("btnReset").addEventListener("click", () => {
+    stats = { done:0, right:0, wrong:0, wrongItems:[] };
+    orderIdx = 0;
+    updateStats();
+    newQuestion();
+  });
+
+  el("mode").addEventListener("change", () => {
+    orderIdx = 0;
+    newQuestion();
+  });
+
+  el("optCount").addEventListener("change", () => newQuestion());
+
+  // ====== 開始 ======
+  loadBank();
 </script>
 
 </body>
