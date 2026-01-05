@@ -102,7 +102,7 @@
       font-weight:750;
     }
     .choice:hover{ background:#f9fafb; }
-    .msg{ margin-top:12px; font-weight:900; }
+    .msg{ margin-top:12px; font-weight:900; white-space:pre-wrap; }
     .ok{ color:var(--ok); }
     .bad{ color:var(--bad); }
 
@@ -201,14 +201,14 @@
 <footer>© 2026 · GitHub Pages</footer>
 
 <script>
-  // ====== 你 repo 的 JSON 檔名（root）======
+  // ====== JSON 檔名（root）======
   const JSON_PATH = "vocab_ceec_1_6.json";
 
   // ====== 狀態 ======
   let bank = [];            // {pos, zh, en}
   let orderIdx = 0;
-  let current = null;       // 當前題目物件
-  let currentAnswer = "";   // 正解文字（依題型）
+  let current = null;
+  let currentAnswer = "";
   let locked = false;
 
   let stats = { done:0, right:0, wrong:0, wrongItems:[] };
@@ -223,25 +223,78 @@
     return arr;
   }
 
-  // 嚴格對齊你的 JSON：pos / zh / en
+  // ✅ A 方案：支援你的 JSON（word/ipa/definition）
+  // - en: word
+  // - pos: 從 definition 開頭抓 "n." "adj." "vt." ...（抓不到就空）
+  // - zh: 從 definition 移除詞性後，取第一段連續中文（遇到英文字母就停）
   function normalizeEntry(x){
-    // 有些 JSON 可能用中文鍵名或大小寫，做個保險
-    const pos = (x.pos ?? x.POS ?? x.part ?? x.partOfSpeech ?? "").toString().trim();
-    const zh  = (x.zh  ?? x.ZH  ?? x.cn ?? x.ch ?? x.chinese ?? x.meaning ?? x.translation ?? "").toString().trim();
-    const en  = (x.en  ?? x.EN  ?? x.word ?? x.english ?? x.vocab ?? "").toString().trim();
-    if (!zh || !en) return null;
+    const en = (x.en ?? x.EN ?? x.word ?? x.vocab ?? x.english ?? "").toString().trim();
+    const def = (x.zh ?? x.ZH ?? x.definition ?? x.meaning ?? x.translation ?? "").toString().trim();
+
+    if (!en || !def) return null;
+    if (def === "/" || def === "-" || def.length < 2) return null;
+
+    const posMatch = def.match(/^(n|adj|adv|vt|vi|v|prep|conj|pron|aux|interj)\./i);
+    const pos = posMatch ? posMatch[0].toLowerCase() : "";
+
+    // 去掉開頭詞性
+    let rest = def.replace(/^(n|adj|adv|vt|vi|v|prep|conj|pron|aux|interj)\./i, "").trim();
+
+    // 取第一段連續中文（避免 "面積a/an" 這種後面黏英文字）
+    const zhMatch = rest.match(/^[\u4e00-\u9fff，。；、…「」『』（）：！？\s]+/);
+    let zh = zhMatch ? zhMatch[0].trim() : "";
+
+    // 若抽不到純中文，就退而求其次：取到遇到英文字母前
+    if (!zh){
+      const cut = rest.search(/[A-Za-z]/);
+      zh = (cut === -1 ? rest : rest.slice(0, cut)).trim();
+    }
+
+    // 過濾掉太短/怪字
+    if (!zh || zh === "/" || zh.length < 1) return null;
+
     return { pos, zh, en };
   }
 
   async function loadBank(){
     $("status").textContent = "載入字庫中…";
+
+    const url = new URL(JSON_PATH, window.location.href);
+    url.searchParams.set("t", Date.now().toString());
+
     try{
-      // cache: no-store + 加上時間戳，避免 GitHub Pages 快取
-      const res = await fetch(JSON_PATH + "?t=" + Date.now(), { cache:"no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      const res = await fetch(url.toString(), {
+        cache: "no-store",
+        headers: { "Accept": "application/json" }
+      });
 
-      const data = await res.json();
+      if (!res.ok){
+        throw new Error(`抓不到 JSON（HTTP ${res.status} ${res.statusText}）\n請求網址：${url}`);
+      }
 
+      const raw = await res.text();
+      const head = raw.trim().slice(0, 80).replace(/\s+/g, " ");
+      if (head.startsWith("<!DOCTYPE") || head.startsWith("<html") || head.includes("<head")){
+        throw new Error(
+          `讀到的不是 JSON，而是 HTML（通常代表路徑錯/404 被轉成頁面）\n` +
+          `請求網址：${url}\n` +
+          `回應開頭：${head}`
+        );
+      }
+
+      let data;
+      try{
+        data = JSON.parse(raw);
+      }catch{
+        throw new Error(
+          `JSON 格式解析失敗（常見：多逗號、缺括號、含註解）\n` +
+          `請求網址：${url}\n` +
+          `回應開頭：${head}`
+        );
+      }
+
+      // ✅ 你的 JSON 是物件，裡面有 "Level 1": [...]
+      // 支援：1) 直接是陣列 2) data.items 3) data.data 4) 找到第一個陣列欄位（例如 Level 1）
       let arr = [];
       if (Array.isArray(data)) arr = data;
       else if (data && Array.isArray(data.items)) arr = data.items;
@@ -259,18 +312,28 @@
       }
 
       if (parsed.length < 10){
-        throw new Error("解析到的資料太少（" + parsed.length + "）。請確認 JSON 欄位包含 pos/zh/en。");
+        throw new Error(
+          `解析到的資料太少（${parsed.length}）\n` +
+          `你目前的 JSON 欄位是 word/definition/ipa；本程式會從 definition 抽中文與詞性。\n` +
+          `若你的 definition 太多是 "/" 或格式怪，會被自動略過。`
+        );
       }
 
       bank = parsed;
-      $("status").textContent = "字庫載入完成：" + bank.length + " 筆 ✅";
+      $("status").textContent = `字庫載入完成：${bank.length} 筆 ✅`;
       newQuestion();
 
     }catch(err){
       console.error(err);
-      $("status").textContent = "讀不到字庫 ❌（" + err.message + "）";
-      $("qText").textContent = "請確認 vocab_ceec_1_6.json 是否與 index.html 同層，且內容為 JSON。";
+      $("status").textContent = "讀不到字庫 ❌";
+      $("qText").textContent = "載入失敗，請看下方錯誤原因。";
       $("choices").innerHTML = "";
+
+      $("msg").textContent = String(err?.message ?? err);
+      $("msg").className = "msg bad";
+
+      $("answerHint").innerHTML =
+        `你可以直接用新分頁打開這個網址檢查：<br><code>${new URL(JSON_PATH, window.location.href)}</code>`;
     }
   }
 
@@ -296,11 +359,9 @@
 
     const type = $("quizType").value;
     if (type === "zh2en"){
-      // 題幹只顯示中文（不顯示英文答案）
       $("qText").textContent = item.zh;
       currentAnswer = item.en;
     }else{
-      // 題幹只顯示英文
       $("qText").textContent = item.en;
       currentAnswer = item.zh;
     }
@@ -310,18 +371,16 @@
     const type = $("quizType").value;
     const k = parseInt($("optCount").value, 10);
 
-    // 正解文字
     const answerText = (type === "zh2en") ? item.en : item.zh;
 
-    // 干擾池：排除同一筆（以 en+zh 組合判斷）
+    // 盡量排除同一筆（以 en+zh 判斷）
     const pool = bank.filter(x => !(x.en === item.en && x.zh === item.zh));
     shuffle(pool);
 
-    // 取出 (k-1) 個干擾
-    const distractors = pool.slice(0, Math.max(2, k-1)).map(x => (type === "zh2en") ? x.en : x.zh);
+    const need = Math.max(2, k - 1);
+    const distractors = pool.slice(0, need).map(x => (type === "zh2en") ? x.en : x.zh);
 
-    const opts = shuffle([answerText, ...distractors]);
-    return opts;
+    return shuffle([answerText, ...distractors]).slice(0, k);
   }
 
   function newQuestion(){
@@ -346,7 +405,7 @@
       const btn = document.createElement("button");
       btn.className = "choice";
       btn.type = "button";
-      btn.textContent = text;          // ✅ 這裡一定有字，不會再空白
+      btn.textContent = text;
       btn.addEventListener("click", () => choose(text));
       box.appendChild(btn);
     });
@@ -389,7 +448,6 @@
       $("msg").className = "msg bad";
       $("answerHint").textContent = "正解是： " + currentAnswer;
 
-      // 錯題格式（依題型）
       const type = $("quizType").value;
       if (type === "zh2en"){
         stats.wrongItems.push(`${current.pos ? current.pos + " " : ""}${current.zh} → ${current.en}（你選：${pick}）`);
@@ -402,7 +460,7 @@
     $("btnNext").disabled = false;
   }
 
-  // ====== 控制 ======
+  // 控制
   $("btnNext").addEventListener("click", newQuestion);
 
   $("btnReset").addEventListener("click", () => {
@@ -419,9 +477,7 @@
   });
 
   $("optCount").addEventListener("change", newQuestion);
-
   $("quizType").addEventListener("change", newQuestion);
-
   $("showPos").addEventListener("change", () => setQuestionUI(current || {pos:"", zh:"", en:""}));
 
   $("btnCopyWrong").addEventListener("click", async () => {
@@ -439,7 +495,7 @@
     }
   });
 
-  // ====== 啟動 ======
+  // 啟動
   loadBank();
 </script>
 </body>
